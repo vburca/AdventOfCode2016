@@ -40,7 +40,6 @@ public class SignalsNoise {
             hm.put( key, 1 );
           }
         }
-
       }
 
       System.out.println( part1( frequentChars ) );
