@@ -78,13 +78,21 @@ public class Radioisotope {
 
   private static class State {
     ArrayList<ArrayList<String>> floors;
+    State parent;
     int elevatorFloor;
     int steps;
 
     // This does not do a deep copy of the arrays, because we only use it to instantiate
     // the first state!
     State( ArrayList<ArrayList<String>> floors, int elevatorFloor, int steps ) {
+      this( floors, elevatorFloor, steps, null );
+    }
+
+    State( ArrayList<ArrayList<String>> floors,
+      int elevatorFloor, int steps, State parent ) {
+
       this.floors = floors;
+      this.parent = parent;
       this.elevatorFloor = elevatorFloor;
       this.steps = steps;
     }
@@ -117,7 +125,7 @@ public class Radioisotope {
       // Add the payload to the new floor
       newFloors.get( newFloor ).addAll( payload );
 
-      return new State( newFloors, newFloor, this.steps + 1 );
+      return new State( newFloors, newFloor, this.steps + 1, this );
     }
 
     // Check to see if all the floors of the state are valid.
@@ -152,6 +160,16 @@ public class Radioisotope {
       }
 
       return !( microchipChems.size() > 0 && generatorChems.size() > 0 );
+    }
+
+    public boolean allEmptyFloorsBelow() {
+      for ( int i = 0; i < this.elevatorFloor; i++ ) {
+        if ( this.floors.get( i ).size() != 0 ) {
+          return false;
+        }
+      }
+
+      return true;
     }
 
     public boolean isTopFloor() {
@@ -205,18 +223,79 @@ public class Radioisotope {
 
       return String.format( "[%d]%s", this.elevatorFloor, gensChipsCount.toString() );
     }
-  }
 
-  // We are done when all floors BUT THE LAST ONE are empty
-  private static boolean isDone( ArrayList<ArrayList<String>> floors ) {
-    for ( int i = 0; i < FLOORS - 1; i++ ) {
-      if ( floors.get( i ).size() > 0 ) {
-        return false;
+    // We are done when all floors BUT THE LAST ONE are empty
+    public boolean isDone() {
+      for ( int i = 0; i < FLOORS - 1; i++ ) {
+        if ( this.floors.get( i ).size() > 0 ) {
+          return false;
+        }
       }
+
+      return true;
     }
 
-    return true;
+    public void printMoves() {
+      ArrayList<State> parents = new ArrayList<State>();
+      State s = this;
+
+      parents.add( s );
+      while ( s.parent != null ) {
+        parents.add( s.parent );
+        s = s.parent;
+      }
+
+      Collections.reverse( parents );
+
+      final String ANSI_CLS = "\u001b[2J";
+      final String ANSI_HOME = "\u001b[H";
+      for ( State state : parents ) {
+        System.out.print( ANSI_CLS + ANSI_HOME );
+        System.out.flush();
+
+        for ( int floorId = FLOORS - 1; floorId >= 0; floorId-- ) {
+          ArrayList<String> floor = state.floors.get( floorId );
+
+          StringBuilder floorStr = new StringBuilder();
+          floorStr.append( String.format( "F%d: ", floorId + 1 ) );
+
+          for ( String chem : elements ) {
+            String generator = String.format( "%s%s", chem, "G" );
+            String microchip = String.format( "%s%s", chem, "M" );
+
+            if ( floor.contains( generator ) ) {
+              floorStr.append( generator );
+            } else {
+              floorStr.append( " . " );
+            }
+
+            floorStr.append( " " );
+
+            if ( floor.contains( microchip ) ) {
+              floorStr.append( microchip );
+            } else {
+              floorStr.append( " . " );
+            }
+
+            floorStr.append( " " );
+          }
+
+          if ( state.elevatorFloor == floorId ) {
+            floorStr.append( "  [E]" );
+          }
+
+          System.out.println( floorStr.toString() );
+        }
+
+        try {
+          Thread.sleep( 200 );
+        } catch ( InterruptedException iee ) {
+          iee.printStackTrace();
+        }
+      }
+    }
   }
+
 
   private static void calculateStepsBFS( ArrayList<ArrayList<String>> floors ) {
     Set<String> visitedStates = new HashSet<String>();
@@ -233,7 +312,8 @@ public class Radioisotope {
       State currentState = statesQueue.remove();
 
       // Check if we are done
-      if ( isDone( currentState.floors ) ) {
+      if ( currentState.isDone() ) {
+        currentState.printMoves();
         System.out.println( currentState.steps );
         done = true;
       } else {
@@ -258,8 +338,7 @@ public class Radioisotope {
           }
 
           // Try to go downwards with this payload
-          // TODO: Maybe do not go downwards if ALL the floors below are empty
-          if ( !currentState.isBottomFloor() ) {
+          if ( !currentState.isBottomFloor() && !currentState.allEmptyFloorsBelow() ) {
             State newDownState = currentState.getNewState( payload, currentState.elevatorFloor - 1 );
             String newDownStateHash = newDownState.getStateHash();
             // Only process further on if this new state is a valid one AND if
@@ -331,5 +410,4 @@ public class Radioisotope {
 
     return validPayloadMatcher.matches();
   }
-
 }
